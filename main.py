@@ -5,26 +5,84 @@ Game -> Symphony testbed
 - Output: WAV audio, MIDI file, symbolic trajectory + basic structural metrics.
 
 Run:
-  python3 main.py  (or: uv run python main.py)
+  uv run python main.py                    # use built-in defaults
+  uv run python main.py --config config.toml
+  uv run python main.py --K 50 --s0 25 -o ./out
 
-Outputs:
-  - {name}_trajectory.wav
-  - {name}_trajectory.mid
-  - {name}_trajectory_symbolic.txt
-  - prints metrics
+Config: optional TOML file with [game], [[runs]], [mapping], output_dir.
+CLI flags override config (--K, --s0, --seed, --output-dir).
 """
 
 from __future__ import annotations
 
+import argparse
 import math
 import random
 import wave
 import struct
 import zlib
+import tomllib
+from pathlib import Path
 from dataclasses import dataclass
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any
 
 from midiutil import MIDIFile
+
+# Output layout: output/{wav,midi,symbolic}/ (overridable via config)
+PROJECT_ROOT = Path(__file__).resolve().parent
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "output"
+
+
+def default_config() -> Dict[str, Any]:
+    """Built-in defaults (no config file)."""
+    return {
+        "game": {"K": 40, "s0": 20},
+        "runs": [
+            {"name": "fair", "p_up": 0.50, "seed": 123},
+            {"name": "biased_up", "p_up": 0.60, "seed": 123},
+        ],
+        "mapping": {
+            "sample_rate": 44100,
+            "base_freq": 220.0,
+            "semitone_span": 28,
+            "min_note_dur": 0.055,
+            "max_note_dur": 0.16,
+            "attack": 0.004,
+            "release": 0.020,
+            "volume": 0.23,
+            "seed": 7,
+        },
+        "output_dir": str(DEFAULT_OUTPUT_DIR),
+    }
+
+
+def load_config(path: Path | None) -> Dict[str, Any]:
+    """Load config from TOML; merge with defaults so partial configs work."""
+    cfg = default_config()
+    if path is not None and path.exists():
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+        if "game" in data:
+            cfg["game"] = {**cfg["game"], **data["game"]}
+        if "runs" in data:
+            cfg["runs"] = data["runs"]
+        if "mapping" in data:
+            cfg["mapping"] = {**cfg["mapping"], **data["mapping"]}
+        if "output_dir" in data:
+            cfg["output_dir"] = data["output_dir"]
+    return cfg
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Game -> Symphony: Gambler's Ruin trajectories to WAV/MIDI/symbolic."
+    )
+    parser.add_argument("--config", "-c", type=Path, default=None, help="Path to TOML config file")
+    parser.add_argument("--K", type=int, default=None, help="State space size (absorbing at 0 and K)")
+    parser.add_argument("--s0", type=int, default=None, help="Initial state")
+    parser.add_argument("--seed", type=int, default=None, help="Override seed for all runs (optional)")
+    parser.add_argument("--output-dir", "-o", type=Path, default=None, help="Output directory (output/wav, etc.)")
+    return parser.parse_args()
 
 
 # -----------------------------
@@ -319,37 +377,45 @@ def trajectory_metrics(traj: List[int]) -> Dict[str, float]:
 # -----------------------------
 
 def main() -> None:
-    # Game parameters
-    K = 40
-    s0 = 20
+    args = parse_args()
+    cfg = load_config(args.config)
 
-    # Compare two different rule-sets (same mapping):
-    # - fair walk p=0.5 (more symmetric)
-    # - biased walk p=0.60 (drifts upward, different musical macro-shape)
+    # CLI overrides
+    if args.K is not None:
+        cfg["game"]["K"] = args.K
+    if args.s0 is not None:
+        cfg["game"]["s0"] = args.s0
+    if args.output_dir is not None:
+        cfg["output_dir"] = str(args.output_dir)
+    if args.seed is not None:
+        for run in cfg["runs"]:
+            run["seed"] = args.seed
+
+    K = cfg["game"]["K"]
+    s0 = cfg["game"]["s0"]
+    output_dir = Path(cfg["output_dir"])
+    wav_dir = output_dir / "wav"
+    midi_dir = output_dir / "midi"
+    symbolic_dir = output_dir / "symbolic"
+
     games = [
-        ("fair", GamblerRuinGame(K=K, p_up=0.50), 123),
-        ("biased_up", GamblerRuinGame(K=K, p_up=0.60), 123),
+        (r["name"], GamblerRuinGame(K=K, p_up=float(r["p_up"])), int(r["seed"]))
+        for r in cfg["runs"]
     ]
+    mapping = MusicMapping(**cfg["mapping"])
 
-    mapping = MusicMapping(
-        sample_rate=44100,
-        base_freq=220.0,
-        semitone_span=28,
-        min_note_dur=0.055,
-        max_note_dur=0.16,
-        attack=0.004,
-        release=0.020,
-        volume=0.23,
-        seed=7
-    )
+    # Ensure output dirs exist
+    wav_dir.mkdir(parents=True, exist_ok=True)
+    midi_dir.mkdir(parents=True, exist_ok=True)
+    symbolic_dir.mkdir(parents=True, exist_ok=True)
 
     for name, game, seed in games:
         traj = game.simulate(s0=s0, seed=seed)
-        wav_path = f"{name}_trajectory.wav"
-        symbolic_path = f"{name}_trajectory_symbolic.txt"
+        wav_path = str(wav_dir / f"{name}_trajectory.wav")
+        symbolic_path = str(symbolic_dir / f"{name}_trajectory_symbolic.txt")
+        midi_path = str(midi_dir / f"{name}_trajectory.mid")
 
         render_trajectory_to_wav(traj, K=K, mapping=mapping, wav_path=wav_path, symbolic_path=symbolic_path)
-        midi_path = f"{name}_trajectory.mid"
         render_trajectory_to_midi(traj, K=K, mapping=mapping, midi_path=midi_path)
 
         m = trajectory_metrics(traj)

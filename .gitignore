@@ -8,3 +8,9 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Generated outputs
+output/
+
+# Local config (copy from config.example.toml)
+config.toml

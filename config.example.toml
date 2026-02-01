@@ -1,0 +1,29 @@
+# Example config for games-to-paths. Copy to config.toml and edit.
+# Run: uv run python main.py --config config.toml
+
+[game]
+K = 40          # state space 0..K (absorbing boundaries)
+s0 = 20         # initial state
+
+[[runs]]
+name = "fair"
+p_up = 0.5
+seed = 123
+
+[[runs]]
+name = "biased_up"
+p_up = 0.6
+seed = 123
+
+[mapping]
+sample_rate = 44100
+base_freq = 220.0
+semitone_span = 28
+min_note_dur = 0.055
+max_note_dur = 0.16
+attack = 0.004
+release = 0.020
+volume = 0.23
+seed = 7
+
+# output_dir = "output"   # optional; default is ./output
