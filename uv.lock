@@ -1,0 +1,20 @@
+version = 1
+revision = 3
+requires-python = ">=3.12"
+
+[[package]]
+name = "games-to-paths"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "midiutil" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "midiutil", specifier = ">=1.2.1" }]
+
+[[package]]
+name = "midiutil"
+version = "1.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/44/fde6772d8bfaea64fcf5eb948124d0a5fdf5f848b14ac22a23ced53e562d/MIDIUtil-1.2.1.tar.gz", hash = "sha256:79fa983bd1efc60785f68a8fe78fa8f45b8d7ec5898bf7cb7f3f7f3336d6a90a", size = 1012831, upload-time = "2018-03-04T19:07:24.722Z" }
