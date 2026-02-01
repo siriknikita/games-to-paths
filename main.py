@@ -5,11 +5,11 @@ Game -> Symphony testbed
 - Output: WAV audio, MIDI file, symbolic trajectory + basic structural metrics.
 
 Run:
-  uv run python main.py                    # use built-in defaults
-  uv run python main.py --config config.toml
+  uv run python main.py                    # use config.toml if present, else built-in defaults
+  uv run python main.py --config other.toml
   uv run python main.py --K 50 --s0 25 -o ./out
 
-Config: optional TOML file with [game], [[runs]], [mapping], output_dir.
+Config: TOML file config.toml (in project dir) is read by default. Sections: [game], [[runs]], [mapping], output_dir.
 CLI flags override config (--K, --s0, --seed, --output-dir).
 """
 
@@ -74,15 +74,29 @@ def load_config(path: Path | None) -> Dict[str, Any]:
 
 
 def parse_args() -> argparse.Namespace:
+    default_config_path = PROJECT_ROOT / "config.toml"
     parser = argparse.ArgumentParser(
         description="Game -> Symphony: Gambler's Ruin trajectories to WAV/MIDI/symbolic."
     )
-    parser.add_argument("--config", "-c", type=Path, default=None, help="Path to TOML config file")
+    parser.add_argument(
+        "--config", "-c",
+        type=Path,
+        default=default_config_path,
+        help="Path to TOML config file (default: config.toml in project directory)",
+    )
+    parser.add_argument(
+        "--no-config",
+        action="store_true",
+        help="Ignore config file and use built-in defaults only",
+    )
     parser.add_argument("--K", type=int, default=None, help="State space size (absorbing at 0 and K)")
     parser.add_argument("--s0", type=int, default=None, help="Initial state")
     parser.add_argument("--seed", type=int, default=None, help="Override seed for all runs (optional)")
     parser.add_argument("--output-dir", "-o", type=Path, default=None, help="Output directory (output/wav, etc.)")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.no_config:
+        args.config = None
+    return args
 
 
 # -----------------------------
