@@ -14,3 +14,4 @@ output/
 
 # Local config (copy from config.example.toml)
 config.toml
+.DS_Store
